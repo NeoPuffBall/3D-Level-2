@@ -21,9 +21,11 @@ C3dglModel Lamp1, Lamp2, Lamp3;
 C3dglModel Bulb1, Bulb2, Bulb3;
 
 
-GLuint idTexgrass, idTexroad, idBufferVelocity, idBufferStartTime;
+GLuint idTexgrass, idTexroad, idBufferVelocity, idBufferStartTime, idTexScreen, idFBO;
 //Particle textures id
 GLuint idTexwater;
+
+GLuint WImage = 800, HImage = 600;
 
 //Skyboxes
 C3dglSkyBox Day,Night;
@@ -144,6 +146,38 @@ bool init()
 		GL_UNSIGNED_BYTE, roadtxt.getBits());
 
 	program.sendUniform("texture0", 0);
+
+	// Create screen space texture
+	glGenTextures(1, &idTexScreen);
+	glBindTexture(GL_TEXTURE_2D, idTexScreen);
+
+
+	// Texture parameters - to get nice filtering
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+	// This will allocate an uninitilised texture
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, WImage, HImage, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+
+	// Create a framebuffer object (FBO)
+	glGenFramebuffers(1, &idFBO);
+	glBindFramebuffer(GL_FRAMEBUFFER, idFBO);
+
+	// Attach a depth buffer
+	GLuint depth_rb;
+
+	glGenRenderbuffers(1, &depth_rb);
+	glBindRenderbuffer(GL_RENDERBUFFER, depth_rb);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, WImage, HImage);
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depth_rb);
+
+	// attach the texture to FBO colour attachment point
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, idTexScreen, 0);
+
+	// switch back to window-system-provided framebuffer
+	glBindFramebufferEXT(GL_FRAMEBUFFER, 0);
 	
 	if (!vertexShader.create(GL_VERTEX_SHADER)) return false;
 	if (!vertexShader.loadFromFile("shaders/particles.vert")) return false;
