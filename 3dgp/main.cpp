@@ -21,13 +21,15 @@ C3dglModel Lamp1, Lamp2, Lamp3;
 C3dglModel Bulb1, Bulb2, Bulb3;
 
 
-GLuint idTexgrass, idTexroad;
+GLuint idTexgrass, idTexroad, idBufferVelocity, idBufferStartTime;
+//Particle textures id
+GLuint idTexwater;
 
 //Skyboxes
 C3dglSkyBox Day,Night;
 
 //GLSL Program
-C3dglProgram program;
+C3dglProgram program, programParticle;
 
 // The View Matrix
 mat4 matrixView;
@@ -48,6 +50,13 @@ bool sunrise = false;
 bool sunset = false;
 bool cycle = false;
 
+// Particle System Params
+const float PERIOD = 0.00075f;
+const float LIFETIME = 6;
+const int NPARTICLES = (int)(LIFETIME / PERIOD);
+
+const float M_PI = 3.14159;
+
 // Camera & navigation
 float maxspeed = 4.f;	// camera max speed
 float accel = 4.f;		// camera acceleration
@@ -64,7 +73,6 @@ bool init()
 
 
 	// Initialise Shaders
-
 	C3dglShader vertexShader;
 	C3dglShader fragmentShader;
 
@@ -137,6 +145,70 @@ bool init()
 
 	program.sendUniform("texture0", 0);
 	
+	if (!vertexShader.create(GL_VERTEX_SHADER)) return false;
+	if (!vertexShader.loadFromFile("shaders/particles.vert")) return false;
+	if (!vertexShader.compile()) return false;
+	if (!fragmentShader.create(GL_FRAGMENT_SHADER)) return false;
+	if (!fragmentShader.loadFromFile("shaders/particles.frag")) return false;
+	if (!fragmentShader.compile()) return false;
+	if (!programParticle.create()) return false;
+	if (!programParticle.attach(vertexShader)) return false;
+	if (!programParticle.attach(fragmentShader)) return false;
+	if (!programParticle.link()) return false;
+	if (!programParticle.use(true)) return false;
+
+	// Setup the particle system
+	programParticle.sendUniform("initialPos", vec3(0, 20.0,0));
+	programParticle.sendUniform("particleLifetime", LIFETIME);
+
+	C3dglBitmap droplet;
+
+	//Load Particle texture
+	droplet.load("models/water.png", GL_RGBA);
+	if (!droplet.getBits()) return false;
+	glActiveTexture(GL_TEXTURE0);
+	glGenTextures(1, &idTexwater);
+	glBindTexture(GL_TEXTURE_2D, idTexwater);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, droplet.getWidth(), droplet.getHeight(), 0, GL_RGBA,
+		GL_UNSIGNED_BYTE, droplet.getBits());
+
+	// setup the point size
+	glEnable(GL_POINT_SPRITE);
+	glPointSize(5);
+
+	// Prepare the particle buffers
+	std::vector<float> bufferVelocity;
+	std::vector<float> bufferStartTime;
+	float time = 0;
+	for (int i = 0; i < NPARTICLES; i++)
+	{
+		programParticle.sendUniform("initialPos", vec3(rand() % 20, 20.0, rand() % 20));
+		float theta = (float)M_PI / 6.f * (float)rand() / (float)RAND_MAX;
+		float phi = (float)M_PI * 2.f * (float)rand() / (float)RAND_MAX;
+		float x = 0;
+		float y = -1;
+		float z = 0;
+		float v = 5 + 0.5f * (float)rand() / (float)RAND_MAX;
+		bufferVelocity.push_back(x * v);
+		bufferVelocity.push_back(y * v);
+		bufferVelocity.push_back(z * v);
+		bufferStartTime.push_back(time);
+		time += PERIOD;
+	}
+	glGenBuffers(1, &idBufferVelocity);
+	glBindBuffer(GL_ARRAY_BUFFER, idBufferVelocity);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(float) * bufferVelocity.size(), &bufferVelocity[0],
+		GL_STATIC_DRAW);
+	glGenBuffers(1, &idBufferStartTime);
+	glBindBuffer(GL_ARRAY_BUFFER, idBufferStartTime);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(float) * bufferStartTime.size(), &bufferStartTime[0],
+		GL_STATIC_DRAW);
+
+
+	// switch on: transparency/blending
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 	// Initialise the View Matrix (initial position of the camera)
 	matrixView = rotate(mat4(1), radians(12.f), vec3(1, 0, 0));
@@ -320,6 +392,33 @@ void renderScene(mat4& matrixView, float time, float deltaTime)
 			diffuse.z += 0.00175;
 		}
 	}
+
+	// RENDER THE PARTICLE SYSTEM
+	
+	// setup the point size
+	glEnable(GL_POINT_SPRITE);
+	glPointSize(5);
+
+	programParticle.use();
+
+	m = matrixView;
+	programParticle.sendUniform("matrixModelView", m);
+
+
+	// render the buffer
+	GLint aVelocity = programParticle.getAttribLocation("aVelocity");
+	GLint aStartTime = programParticle.getAttribLocation("aStartTime");
+	glEnableVertexAttribArray(aVelocity); // velocity
+	glEnableVertexAttribArray(aStartTime); // start time
+	glBindBuffer(GL_ARRAY_BUFFER, idBufferVelocity);
+	glVertexAttribPointer(aVelocity, 3, GL_FLOAT, GL_FALSE, 0, 0);
+	glBindBuffer(GL_ARRAY_BUFFER, idBufferStartTime);
+	glVertexAttribPointer(aStartTime, 1, GL_FLOAT, GL_FALSE, 0, 0);
+	glDrawArrays(GL_POINTS, 0, NPARTICLES);
+	glDisableVertexAttribArray(aVelocity);
+	glDisableVertexAttribArray(aStartTime);
+
+	glDepthMask(GL_TRUE);
 }
 
 void onRender()
@@ -341,6 +440,8 @@ void onRender()
 		_vel * deltaTime),		// animate camera motion (controlled by WASD keys)
 		-pitch, vec3(1, 0, 0))	// switch the pitch on
 		* matrixView;
+
+	programParticle.sendUniform("time", time);
 
 	program.sendUniform("lightDir.direction", vec3(0.4f, 0.5f, 0.9f));
 	program.sendUniform("lightDir.diffuse", diffuse);
@@ -381,7 +482,9 @@ void onReshape(int w, int h)
 	mat4 matrixProjection = perspective(radians(_fov), ratio, 0.02f, 1000.f);
 
 	// Setup the Projection Matrix
-	program.sendUniform("matrixProjection", matrixProjection);
+	mat4 m = perspective(radians(60.f), ratio, 0.02f, 1000.f);
+	program.sendUniform("matrixProjection", m);
+	programParticle.sendUniform("matrixProjection", m);
 }
 
 // Handle WASDQE keys
