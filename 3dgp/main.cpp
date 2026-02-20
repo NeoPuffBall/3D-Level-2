@@ -25,13 +25,15 @@ GLuint idTexgrass, idTexroad, idBufferVelocity, idBufferStartTime, idTexScreen, 
 //Particle textures id
 GLuint idTexwater;
 
-GLuint WImage = 800, HImage = 600;
+GLuint bufQuad;
+
+GLuint WImage = 900, HImage = 700;
 
 //Skyboxes
 C3dglSkyBox Day,Night;
 
 //GLSL Program
-C3dglProgram program, programParticle;
+C3dglProgram program, programParticle, programEffect;
 
 // The View Matrix
 mat4 matrixView;
@@ -178,6 +180,35 @@ bool init()
 
 	// switch back to window-system-provided framebuffer
 	glBindFramebufferEXT(GL_FRAMEBUFFER, 0);
+
+	if (!vertexShader.create(GL_VERTEX_SHADER)) return false;
+	if (!vertexShader.loadFromFile("shaders/effect.vert")) return false;
+	if (!vertexShader.compile()) return false;
+	if (!fragmentShader.create(GL_FRAGMENT_SHADER)) return false;
+	if (!fragmentShader.loadFromFile("shaders/effect.frag")) return false;
+	if (!fragmentShader.compile()) return false;
+	if (!programEffect.create()) return false;
+	if (!programEffect.attach(vertexShader)) return false;
+	if (!programEffect.attach(fragmentShader)) return false;
+	if (!programEffect.link()) return false;
+	if (!programEffect.use(true)) return false;
+
+	programEffect.sendUniform("texture0", 0);
+
+	// Create Quad
+	float vertices[] = {
+	0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+	1.0f, 0.0f, 0.0f, 1.0f, 0.0f,
+	1.0f, 1.0f, 0.0f, 1.0f, 1.0f,
+	0.0f, 1.0f, 0.0f, 0.0f, 1.0f
+	};
+
+	// Generate the buffer name
+	glGenBuffers(1, &bufQuad);
+
+	// Bind the vertex buffer and send data
+	glBindBuffer(GL_ARRAY_BUFFER, bufQuad);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 	
 	if (!vertexShader.create(GL_VERTEX_SHADER)) return false;
 	if (!vertexShader.loadFromFile("shaders/particles.vert")) return false;
@@ -264,6 +295,19 @@ bool init()
 	cout << endl;
 
 	return true;
+}
+
+// called before window opened or resized - to setup the Projection Matrix
+void onReshape(int w, int h)
+{
+	float ratio = w * 1.0f / h;      // we hope that h is not zero
+	glViewport(0, 0, w, h);
+	mat4 matrixProjection = perspective(radians(_fov), ratio, 0.02f, 1000.f);
+
+	// Setup the Projection Matrix
+	mat4 m = perspective(radians(60.f), ratio, 0.02f, 1000.f);
+	program.sendUniform("matrixProjection", m);
+	programParticle.sendUniform("matrixProjection", m);
 }
 
 void renderScene(mat4& matrixView, float time, float deltaTime)
@@ -453,6 +497,33 @@ void renderScene(mat4& matrixView, float time, float deltaTime)
 	glDisableVertexAttribArray(aStartTime);
 
 	glDepthMask(GL_TRUE);
+
+	// Pass 2: on-screen rendering
+	glBindFramebufferEXT(GL_FRAMEBUFFER, 0);
+
+	// setup ortographic projection
+	programEffect.sendUniform("matrixProjection", ortho(0, 1, 0, 1, -1, 1));
+
+	// clear screen and buffers
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glBindTexture(GL_TEXTURE_2D, idTexScreen);
+
+	// setup identity matrix as the model-view
+	programEffect.sendUniform("matrixModelView", mat4(1));
+
+	GLuint attribVertex = programEffect.getAttribLocation("aVertex");
+	GLuint attribTextCoord = programEffect.getAttribLocation("aTexCoord");
+	glEnableVertexAttribArray(attribVertex);
+	glEnableVertexAttribArray(attribTextCoord);
+	glBindBuffer(GL_ARRAY_BUFFER, bufQuad);
+	glVertexAttribPointer(attribVertex, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), 0);
+	glVertexAttribPointer(attribTextCoord, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float),
+		(void*)(3 * sizeof(float)));
+	glDrawArrays(GL_QUADS, 0, 4);
+	glDisableVertexAttribArray(attribVertex);
+	glDisableVertexAttribArray(attribTextCoord);
+
+	//onReshape(WImage, HImage);
 }
 
 void onRender()
@@ -462,6 +533,9 @@ void onRender()
 	float time = glutGet(GLUT_ELAPSED_TIME) * 0.001f;	// time since start in seconds
 	float deltaTime = time - prev;						// time since last frame
 	prev = time;										// framerate is 1/deltaTime
+
+	// Pass 1: off-screen rendering
+	glBindFramebufferEXT(GL_FRAMEBUFFER, idFBO);
 
 	// clear screen and buffers
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -501,6 +575,9 @@ void onRender()
 	// the camera must be moved down by terrainY to avoid unwanted effects
 	matrixView = translate(matrixView, vec3(0, -terrainY, 0));
 
+	// Pass 2: on-screen rendering
+	glBindFramebufferEXT(GL_FRAMEBUFFER, 0);
+
 	// essential for double-buffering technique
 	glutSwapBuffers();
 
@@ -508,18 +585,6 @@ void onRender()
 	glutPostRedisplay();
 }
 
-// called before window opened or resized - to setup the Projection Matrix
-void onReshape(int w, int h)
-{
-	float ratio = w * 1.0f / h;      // we hope that h is not zero
-	glViewport(0, 0, w, h);
-	mat4 matrixProjection = perspective(radians(_fov), ratio, 0.02f, 1000.f);
-
-	// Setup the Projection Matrix
-	mat4 m = perspective(radians(60.f), ratio, 0.02f, 1000.f);
-	program.sendUniform("matrixProjection", m);
-	programParticle.sendUniform("matrixProjection", m);
-}
 
 // Handle WASDQE keys
 void onKeyDown(unsigned char key, int x, int y)
