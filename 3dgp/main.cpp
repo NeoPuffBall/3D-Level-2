@@ -76,7 +76,6 @@ bool init()
 	glShadeModel(GL_SMOOTH);	// smooth shading mode is the default one; try GL_FLAT here!
 	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);	// this is the default one; try GL_LINE!
 
-
 	// Initialise Shaders
 	C3dglShader vertexShader;
 	C3dglShader fragmentShader;
@@ -250,16 +249,16 @@ bool init()
 	float time = 0;
 	for (int i = 0; i < NPARTICLES; i++)
 	{
-		programParticle.sendUniform("initialPos", vec3(0, 30, 0));
-		float theta = (float)M_PI / 6.f * (float)rand() / (float)RAND_MAX;
-		float phi = (float)M_PI * 2.f * (float)rand() / (float)RAND_MAX;
+		programParticle.sendUniform("initialPos", vec3(0, 40, 0));
+		float theta = (float)M_PI / 6.f /** (float)rand() / (float)RAND_MAX*/;
+		float phi = (float)M_PI * 2.f /** (float)rand() / (float)RAND_MAX*/;
 		float x = 0;
 		float y = -1;
 		float z = 0;
-		float v = 5;
-		float px = (rand() % 100) - 60;
-		float py = 30;
-		float pz = (rand() % 100) - 60;
+		float v = 10;
+		float px = (rand() % 100) - 64;
+		float py = 40;
+		float pz = (rand() % 100) - 64;
 		bufferVelocity.push_back(x * v);
 		bufferVelocity.push_back(y * v);
 		bufferVelocity.push_back(z * v);
@@ -294,8 +293,6 @@ bool init()
 		vec3(4.0, 1.5, 0.0),
 		vec3(0.0, 1.0, 0.0));
 	
-	// setup the screen background colour
-	//glClearColor(0.2f, 0.6f, 1.f, 1.0f);   // blue sky background
 
 	cout << endl;
 	cout << "Use:" << endl;
@@ -617,11 +614,13 @@ void onKeyDown(unsigned char key, int x, int y)
 		{
 			cycle = true;
 			cout << "Day/Night Cycle: On" << endl;
+			break;
 		}
 		else
 		{
 			cycle = false;
 			cout << "Day/Night Cycle: Off" << endl;
+			break;
 		}
 	}
 	case 'n':
@@ -631,12 +630,14 @@ void onKeyDown(unsigned char key, int x, int y)
 			negative = true;
 			programEffect.sendUniform("negative",negative);
 			cout << "PhotoNegative mode: On" << endl;
+			break;
 		}
 		else
 		{
 			negative = false;
 			programEffect.sendUniform("negative", negative);
 			cout << "PhotoNegative mode: Off" << endl;
+			break;
 		}
 	}
 	}
