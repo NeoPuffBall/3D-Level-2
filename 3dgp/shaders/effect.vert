@@ -3,9 +3,13 @@
 uniform mat4 matrixProjection;
 uniform mat4 matrixModelView;
 
+// Uniform: PhotoNegative effect
+uniform vec4 negate;
+
 in vec3 aVertex;
 in vec2 aTexCoord;
 out vec2 texCoord0;
+//out vec4 negate0;
 
 
 void main(void)
@@ -18,5 +22,5 @@ gl_Position = matrixProjection * position;
 
 // calculate texture coordinate
 texCoord0 = aTexCoord;
-
+//negate0 = negate;
 }

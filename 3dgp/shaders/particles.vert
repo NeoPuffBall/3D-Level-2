@@ -19,13 +19,15 @@ uniform float time; // Animation Time
 in vec3 aVelocity; // Particle initial velocity
 in float aStartTime; // Particle "birth" time
 
+in vec3 individualPos;
+
 // Output Variable (sent to Fragment Shader)
 out float age; // age of the particle (0..1)
 
 void main()
 {
 float t = mod(time - aStartTime, particleLifetime);
-vec3 pos = initialPos + aVelocity * t + gravity * t * t;
+vec3 pos = individualPos + aVelocity * t + gravity * t * t;
 age = t / particleLifetime;
 
 // calculate position (normal calculation not applicable here)

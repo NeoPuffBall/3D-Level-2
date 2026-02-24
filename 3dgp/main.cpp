@@ -21,13 +21,13 @@ C3dglModel Lamp1, Lamp2, Lamp3;
 C3dglModel Bulb1, Bulb2, Bulb3;
 
 
-GLuint idTexgrass, idTexroad, idBufferVelocity, idBufferStartTime, idTexScreen, idFBO;
+GLuint idTexgrass, idTexroad, idBufferVelocity, idBufferStartTime, idTexScreen, idFBO, idBufferPosition;
 //Particle textures id
 GLuint idTexwater;
 
 GLuint bufQuad;
 
-GLuint WImage = 900, HImage = 700;
+GLuint WImage = 800, HImage = 600;
 
 //Skyboxes
 C3dglSkyBox Day,Night;
@@ -53,6 +53,7 @@ vec3 Mdiffuse = vec3(0.2f, 0.2f, 0.6f);
 bool sunrise = false;
 bool sunset = false;
 bool cycle = false;
+bool negative = false;
 
 // Particle System Params
 const float PERIOD = 0.00075f;
@@ -149,6 +150,18 @@ bool init()
 
 	program.sendUniform("texture0", 0);
 
+	if (!vertexShader.create(GL_VERTEX_SHADER)) return false;
+	if (!vertexShader.loadFromFile("shaders/effect.vert")) return false;
+	if (!vertexShader.compile()) return false;
+	if (!fragmentShader.create(GL_FRAGMENT_SHADER)) return false;
+	if (!fragmentShader.loadFromFile("shaders/effect.frag")) return false;
+	if (!fragmentShader.compile()) return false;
+	if (!programEffect.create()) return false;
+	if (!programEffect.attach(vertexShader)) return false;
+	if (!programEffect.attach(fragmentShader)) return false;
+	if (!programEffect.link()) return false;
+	if (!programEffect.use(true)) return false;
+
 	// Create screen space texture
 	glGenTextures(1, &idTexScreen);
 	glBindTexture(GL_TEXTURE_2D, idTexScreen);
@@ -180,18 +193,6 @@ bool init()
 
 	// switch back to window-system-provided framebuffer
 	glBindFramebufferEXT(GL_FRAMEBUFFER, 0);
-
-	if (!vertexShader.create(GL_VERTEX_SHADER)) return false;
-	if (!vertexShader.loadFromFile("shaders/effect.vert")) return false;
-	if (!vertexShader.compile()) return false;
-	if (!fragmentShader.create(GL_FRAGMENT_SHADER)) return false;
-	if (!fragmentShader.loadFromFile("shaders/effect.frag")) return false;
-	if (!fragmentShader.compile()) return false;
-	if (!programEffect.create()) return false;
-	if (!programEffect.attach(vertexShader)) return false;
-	if (!programEffect.attach(fragmentShader)) return false;
-	if (!programEffect.link()) return false;
-	if (!programEffect.use(true)) return false;
 
 	programEffect.sendUniform("texture0", 0);
 
@@ -245,19 +246,26 @@ bool init()
 	// Prepare the particle buffers
 	std::vector<float> bufferVelocity;
 	std::vector<float> bufferStartTime;
+	std::vector<float> bufferPosition;
 	float time = 0;
 	for (int i = 0; i < NPARTICLES; i++)
 	{
-		programParticle.sendUniform("initialPos", vec3(rand() % 20, 20.0, rand() % 20));
+		programParticle.sendUniform("initialPos", vec3(0, 30, 0));
 		float theta = (float)M_PI / 6.f * (float)rand() / (float)RAND_MAX;
 		float phi = (float)M_PI * 2.f * (float)rand() / (float)RAND_MAX;
 		float x = 0;
 		float y = -1;
 		float z = 0;
-		float v = 5 + 0.5f * (float)rand() / (float)RAND_MAX;
+		float v = 5;
+		float px = (rand() % 100) - 60;
+		float py = 30;
+		float pz = (rand() % 100) - 60;
 		bufferVelocity.push_back(x * v);
 		bufferVelocity.push_back(y * v);
 		bufferVelocity.push_back(z * v);
+		bufferPosition.push_back(px);
+		bufferPosition.push_back(py);
+		bufferPosition.push_back(pz);
 		bufferStartTime.push_back(time);
 		time += PERIOD;
 	}
@@ -269,11 +277,15 @@ bool init()
 	glBindBuffer(GL_ARRAY_BUFFER, idBufferStartTime);
 	glBufferData(GL_ARRAY_BUFFER, sizeof(float) * bufferStartTime.size(), &bufferStartTime[0],
 		GL_STATIC_DRAW);
+	glGenBuffers(1, &idBufferPosition);
+	glBindBuffer(GL_ARRAY_BUFFER, idBufferPosition);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(float) * bufferPosition.size(), &bufferPosition[0],
+		GL_STATIC_DRAW);
 
 
 	// switch on: transparency/blending
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+//	glEnable(GL_BLEND);
+//	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 	// Initialise the View Matrix (initial position of the camera)
 	matrixView = rotate(mat4(1), radians(12.f), vec3(1, 0, 0));
@@ -292,6 +304,7 @@ bool init()
 	cout << "  Shift to speed up your movement" << endl;
 	cout << "  Drag the mouse to look around" << endl;
 	cout << "  C to turn on/off the day/night cycle" << endl;
+	cout << "  N to turn on/oof PhotoNegative mode" << endl;
 	cout << endl;
 
 	return true;
@@ -438,12 +451,6 @@ void renderScene(mat4& matrixView, float time, float deltaTime)
 
 	program.sendUniform("lightAmbient4.color", vec3(0.0f, 0.0f, 0.0f));
 
-	//m = matrixView;
-	//m = translate(m, vec3(3.75, 7.5, -10));
-	//m = scale(m, vec3(0.5f, 0.5f, 0.5f));
-	//program.sendUniform("matrixModelView", m);
-	//glutSolidSphere(1, 32, 32);
-
 	//Control day-night cycle
 	if (cycle)
 	{
@@ -471,6 +478,8 @@ void renderScene(mat4& matrixView, float time, float deltaTime)
 		}
 	}
 
+	
+
 	// RENDER THE PARTICLE SYSTEM
 	
 	// setup the point size
@@ -486,15 +495,20 @@ void renderScene(mat4& matrixView, float time, float deltaTime)
 	// render the buffer
 	GLint aVelocity = programParticle.getAttribLocation("aVelocity");
 	GLint aStartTime = programParticle.getAttribLocation("aStartTime");
+	GLint aIndividualPosition = programParticle.getAttribLocation("individualPos");
 	glEnableVertexAttribArray(aVelocity); // velocity
 	glEnableVertexAttribArray(aStartTime); // start time
+	glEnableVertexAttribArray(aIndividualPosition);
 	glBindBuffer(GL_ARRAY_BUFFER, idBufferVelocity);
 	glVertexAttribPointer(aVelocity, 3, GL_FLOAT, GL_FALSE, 0, 0);
 	glBindBuffer(GL_ARRAY_BUFFER, idBufferStartTime);
 	glVertexAttribPointer(aStartTime, 1, GL_FLOAT, GL_FALSE, 0, 0);
+	glBindBuffer(GL_ARRAY_BUFFER, idBufferPosition);
+	glVertexAttribPointer(aIndividualPosition, 3, GL_FLOAT, GL_FALSE, 0, 0);
 	glDrawArrays(GL_POINTS, 0, NPARTICLES);
 	glDisableVertexAttribArray(aVelocity);
 	glDisableVertexAttribArray(aStartTime);
+	glDisableVertexAttribArray(aIndividualPosition);
 
 	glDepthMask(GL_TRUE);
 
@@ -609,7 +623,22 @@ void onKeyDown(unsigned char key, int x, int y)
 			cycle = false;
 			cout << "Day/Night Cycle: Off" << endl;
 		}
-	} 
+	}
+	case 'n':
+	{
+		if (!negative)
+		{
+			negative = true;
+			programEffect.sendUniform("negative",negative);
+			cout << "PhotoNegative mode: On" << endl;
+		}
+		else
+		{
+			negative = false;
+			programEffect.sendUniform("negative", negative);
+			cout << "PhotoNegative mode: Off" << endl;
+		}
+	}
 	}
 }
 
