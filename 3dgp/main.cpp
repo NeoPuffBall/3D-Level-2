@@ -52,8 +52,10 @@ vec3 Mdiffuse = vec3(0.2f, 0.2f, 0.6f);
 
 bool sunrise = false;
 bool sunset = false;
-bool cycle = false;
+bool day = true;
 bool negative = false;
+bool vig = false;
+bool rain = false;
 
 // Particle System Params
 const float PERIOD = 0.00075f;
@@ -300,8 +302,10 @@ bool init()
 	cout << "  QE or PgUp/Dn to move the camera up and down" << endl;
 	cout << "  Shift to speed up your movement" << endl;
 	cout << "  Drag the mouse to look around" << endl;
-	cout << "  C to turn on/off the day/night cycle" << endl;
-	cout << "  N to turn on/oof PhotoNegative mode" << endl;
+	cout << "  C to switch day and night" << endl;
+	cout << "  N to turn on/off PhotoNegative mode" << endl;
+	cout << "  I to turn on/off Instagram-Style Sepia filter " << endl;
+	cout << "  R to turn on/off Rain" << endl;
 	cout << endl;
 
 	return true;
@@ -448,66 +452,42 @@ void renderScene(mat4& matrixView, float time, float deltaTime)
 
 	program.sendUniform("lightAmbient4.color", vec3(0.0f, 0.0f, 0.0f));
 
-	//Control day-night cycle
-	if (cycle)
-	{
-		if (diffuse.x >= 5 && diffuse.y >= 5 && diffuse.z >= 2)
-		{
-			sunrise = false;
-			sunset = true;
-		}
-		if (sunset)
-		{
-			diffuse.x -= 0.005;
-			diffuse.y -= 0.005;
-			diffuse.z -= 0.00175;
-		}
-		if (diffuse.x <= 0.01 && diffuse.y <= 0.01 && diffuse.z <= 0.0035)
-		{
-			sunrise = true;
-			sunset = false;
-		}
-		if (sunrise)
-		{
-			diffuse.x += 0.005;
-			diffuse.y += 0.005;
-			diffuse.z += 0.00175;
-		}
-	}
-
 	
 
 	// RENDER THE PARTICLE SYSTEM
 	
-	// setup the point size
-	glEnable(GL_POINT_SPRITE);
-	glPointSize(5);
+	if (rain)
+	{
+		// setup the point size
+		glEnable(GL_POINT_SPRITE);
+		glPointSize(5);
 
-	programParticle.use();
+		programParticle.use();
 
-	m = matrixView;
-	programParticle.sendUniform("matrixModelView", m);
+		m = matrixView;
+		programParticle.sendUniform("matrixModelView", m);
 
 
-	// render the buffer
-	GLint aVelocity = programParticle.getAttribLocation("aVelocity");
-	GLint aStartTime = programParticle.getAttribLocation("aStartTime");
-	GLint aIndividualPosition = programParticle.getAttribLocation("individualPos");
-	glEnableVertexAttribArray(aVelocity); // velocity
-	glEnableVertexAttribArray(aStartTime); // start time
-	glEnableVertexAttribArray(aIndividualPosition);
-	glBindBuffer(GL_ARRAY_BUFFER, idBufferVelocity);
-	glVertexAttribPointer(aVelocity, 3, GL_FLOAT, GL_FALSE, 0, 0);
-	glBindBuffer(GL_ARRAY_BUFFER, idBufferStartTime);
-	glVertexAttribPointer(aStartTime, 1, GL_FLOAT, GL_FALSE, 0, 0);
-	glBindBuffer(GL_ARRAY_BUFFER, idBufferPosition);
-	glVertexAttribPointer(aIndividualPosition, 3, GL_FLOAT, GL_FALSE, 0, 0);
-	glDrawArrays(GL_POINTS, 0, NPARTICLES);
-	glDisableVertexAttribArray(aVelocity);
-	glDisableVertexAttribArray(aStartTime);
-	glDisableVertexAttribArray(aIndividualPosition);
+		// render the buffer
+		GLint aVelocity = programParticle.getAttribLocation("aVelocity");
+		GLint aStartTime = programParticle.getAttribLocation("aStartTime");
+		GLint aIndividualPosition = programParticle.getAttribLocation("individualPos");
+		glEnableVertexAttribArray(aVelocity); // velocity
+		glEnableVertexAttribArray(aStartTime); // start time
+		glEnableVertexAttribArray(aIndividualPosition);
+		glBindBuffer(GL_ARRAY_BUFFER, idBufferVelocity);
+		glVertexAttribPointer(aVelocity, 3, GL_FLOAT, GL_FALSE, 0, 0);
+		glBindBuffer(GL_ARRAY_BUFFER, idBufferStartTime);
+		glVertexAttribPointer(aStartTime, 1, GL_FLOAT, GL_FALSE, 0, 0);
+		glBindBuffer(GL_ARRAY_BUFFER, idBufferPosition);
+		glVertexAttribPointer(aIndividualPosition, 3, GL_FLOAT, GL_FALSE, 0, 0);
+		glDrawArrays(GL_POINTS, 0, NPARTICLES);
+		glDisableVertexAttribArray(aVelocity);
+		glDisableVertexAttribArray(aStartTime);
+		glDisableVertexAttribArray(aIndividualPosition);
 
-	glDepthMask(GL_TRUE);
+		glDepthMask(GL_TRUE);
+	}
 
 	// Pass 2: on-screen rendering
 	glBindFramebufferEXT(GL_FRAMEBUFFER, 0);
@@ -610,16 +590,18 @@ void onKeyDown(unsigned char key, int x, int y)
 	case 'q': _acc.y = -accel; break;
 	case 'c':
 	{
-		if (!cycle) 
+		if (!day) 
 		{
-			cycle = true;
-			cout << "Day/Night Cycle: On" << endl;
+			day = true;
+			cout << "Day" << endl;
+			diffuse = vec3(5.0f, 5.0f, 2.0f);
 			break;
 		}
 		else
 		{
-			cycle = false;
-			cout << "Day/Night Cycle: Off" << endl;
+			day = false;
+			cout << "Night" << endl;
+			diffuse = vec3(0, 0, 0);
 			break;
 		}
 	}
@@ -638,6 +620,36 @@ void onKeyDown(unsigned char key, int x, int y)
 			programEffect.sendUniform("negative", negative);
 			cout << "PhotoNegative mode: Off" << endl;
 			break;
+		}
+	}
+	case 'i':
+	{
+		if (!vig)
+		{
+			vig = true;
+			programEffect.sendUniform("vig", vig);
+			cout << "Instagram-style sepia mode: On" << endl;
+			break;
+		}
+		else
+		{
+			vig = false;
+			programEffect.sendUniform("vig", vig);
+			cout << "Instagram-style sepia mode: Off" << endl;
+			break;
+		}
+	}
+	case 'r':
+	{
+		if (!rain)
+		{
+			rain = true;
+			cout << "Rain: On" << endl;
+		}
+		else
+		{
+			rain = false;
+			cout << "Rain: Off" << endl;
 		}
 	}
 	}

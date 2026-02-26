@@ -9,9 +9,7 @@ in vec2 texCoord0;
 uniform sampler2D texture0;
 uniform vec2 resolution = vec2(800, 600);
 uniform bool negative = false;
-uniform vec2 resolution = vec2(800, 600);
 uniform bool vig = false;
-uniform bool sep = false;
 
 // Output Variable (sent down through the Pipeline)
 out vec4 outColor;
@@ -46,9 +44,6 @@ dist = smoothstep(RADIUS, RADIUS-SOFTNESS, dist);
 
 // mix in the vignette
 outColor.rgb = mix(outColor.rgb, outColor.rgb * dist, 0.5);
-}
-else if (sep)
-{
 
 // Sepia
 
@@ -57,6 +52,10 @@ float gray = dot(outColor.rgb, lum);
 
 // mix-in the sepia effect
 outColor.rgb = mix(outColor.rgb, vec3(gray) * sepia, 0.75);
+}
+else
+{
+outColor = texture(texture0, texCoord0);
 }
 
 }
